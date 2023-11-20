@@ -16,9 +16,19 @@ enum bit<16> ether_type_t {
 	MPLS = 0x8874
 }
 
+#if __TARGET_TOFINO__ == 1
 const PortId_t CPU_PORT = 192;
+#elif __TARGET_TOFINO__ == 2
+const PortId_t CPU_PORT = 192;
+#endif
 
+#ifndef IPV4_HOST_SIZE
+	#define IPV4_HOST_SIZE 131072
+#endif
 
+#ifndef IPV4_LPM_SIZE
+	#define IPV4_LPM_SIZE 12288
+#endif
 
 /*** HEADER DEFINITIONS ***/
 

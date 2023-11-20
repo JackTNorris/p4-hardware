@@ -16,8 +16,16 @@ enum bit<16> ether_type_t {
 	MPLS = 0x8874
 }
 
-const PortId_t CPU_PORT = 192;
 
+#if __TARGET_TOFINO__ == 1
+const PortId_t CPU_PORT = 192;
+#elif __TARGET_TOFINO__ == 2
+const PortId_t CPU_PORT = 192;
+#endif
+
+#ifndef IPV4_HOST_SIZE
+	#define IPV4_HOST_SIZE 131072
+#endif
 
 
 /*** HEADER DEFINITIONS ***/
@@ -48,6 +56,28 @@ header ipv4_h {
 	bit<16> hdr_checksum;
 	ipv4_addr_t src_addr;
 	ipv4_addr_t dst_addr;
+}
+
+header udp_t{
+  bit<16> srcPort;
+  bit<16> desPort;
+  bit<16> len;
+  bit<16> checksum;
+}
+
+header pmu_t {
+    bit<16>   sync;
+    bit<16>   frame_size;
+    bit<16>   id_code;
+    bit<32>   soc;
+    bit<32>   fracsec;
+    bit<16>   stat;
+    bit<64>   phasors;
+    bit<16>   freq;
+    bit<16>   dfreq;
+    bit<32>   analog;
+    bit<16>   digital;
+    bit<16>   chk;
 }
 
 /*** INGRESS PIPELINE ***/
@@ -107,9 +137,9 @@ control MyIngress(
 		ig_tm_md.ucast_egress_port = port;
 	}
 
-        action copy_to_cpu() {
-                ig_tm_md.copy_to_cpu = 1;
-        }
+    action copy_to_cpu() {
+        ig_tm_md.copy_to_cpu = 1;
+    }
 
 	action drop() {
 		ig_dprsr_md.drop_ctl = 1;
