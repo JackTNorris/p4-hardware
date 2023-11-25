@@ -8,6 +8,7 @@ import math
 import struct
 import pandas as pd
 import sys
+from utils.pmu_csv_parser import parse_csv_data
 
 from scapy.all import IP, TCP, UDP, Ether, get_if_hwaddr, get_if_list, sendp
 
@@ -79,8 +80,8 @@ def generate_packet(time, voltage, angle, settings={"pmu_measurement_bytes": 8, 
 
     return pmu_packet_payload
 
-def main():
 
+def main():
     if len(sys.argv)<3:
         print('pass 2 arguments: <iface> <destination>')
         exit(1)
@@ -89,11 +90,20 @@ def main():
     iface = get_if(sys.argv[1])
 
     print("sending on interface %s to %s" % (iface, str(addr)))
+    pmu_csv_data = parse_csv_data(
+        './data/pmu12.csv',
+        "TimeTag",
+        ["Magnitude01", "Magnitude02", "Magnitude03"],
+        ["Angle01", "Angle02", "Angle03"]
+    )
 
-
-    pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_packet('2014-01-28 18:00:13.583000000', 69420, 42000)
-    sendp(pkt, iface=iface, verbose=False)
+    num_to_send = len(pmu_csv_data["times"])
+    num_to_send - 50
+    for i in range(num_to_send):
+        pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
+        pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_packet(pmu_csv_data["times"][i], pmu_csv_data["magnitudes"][0][i], pmu_csv_data["phase_angles"][0][i])
+        sendp(pkt, iface=iface, verbose=False)
+        print(i)
 
 
 if __name__ == '__main__':
