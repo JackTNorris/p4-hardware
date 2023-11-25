@@ -58,11 +58,13 @@ def pmu_packet_parser(data, settings={"pmu_measurement_bytes": 8, "num_phasors":
 counter = 0
 def handle_pkt(pkt, packet_buffer):
     if UDP in pkt and pkt[UDP].dport == 1234:
-        print("got a packet")
         global counter
         counter += 1
-        print(counter)
-        packet_buffer.add_packet(pmu_packet_parser(pkt[UDP].payload.load))
+        parsed_pmu_packet = pmu_packet_parser(pkt[UDP].payload.load)
+        if counter > 1:
+            if parsed_pmu_packet['soc'] + parsed_pmu_packet['frac_sec'] / 1000000 > packet_buffer.get_recent_timestamp() + 0.02:
+                print("A packet has been lost @ row", counter + 1)
+        packet_buffer.add_packet(parsed_pmu_packet)
 
 
 def parse_phasors(phasor_data, settings={"num_phasors": 1, "pmu_measurement_bytes": 8}):

@@ -9,6 +9,9 @@ class PMUPacketBuffer:
         self.buffer.sort(key=lambda x: (x['soc'], x['frac_sec']), reverse=True)
         # Keep only the 3 most recent packets
         self.buffer = self.buffer[:3]
+    
+    def get_recent_timestamp(self):
+        return self.buffer[0]['soc'] + self.buffer[0]['frac_sec'] / 1000000
 
     def get_packets(self):
         return self.buffer
