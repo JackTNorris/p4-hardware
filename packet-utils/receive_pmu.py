@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import sys
 
 from scapy.all import (
@@ -73,7 +72,7 @@ def parse_phasors(phasor_data, settings={"num_phasors": 1, "pmu_measurement_byte
 
 def main():
     if len(sys.argv)<2:
-    	print('pass 1 argument: <iface>')
+        print('pass 1 argument: <iface>')
     iface = get_if(sys.argv[1])
     print("sniffing on %s" % iface)
     sys.stdout.flush()

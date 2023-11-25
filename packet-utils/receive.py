@@ -50,7 +50,7 @@ def handle_pkt(pkt):
 
 def main():
     if len(sys.argv)<2:
-    	print('pass 1 argument: <iface>')
+        print('pass 1 argument: <iface>')
     iface = get_if(sys.argv[1])
     print("sniffing on %s" % iface)
     sys.stdout.flush()
