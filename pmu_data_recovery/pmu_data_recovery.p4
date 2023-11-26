@@ -90,11 +90,13 @@ struct my_ingress_headers_t {
 
 struct my_ingress_metadata_t { }
 
+/*
 struct digest_pmu_data_t {
 	mac_addr_t dst_addr;
 	PortId_t port;
 	mac_addr_t src_addr;
 }
+*/
 
 parser MyIngressParser(packet_in                pkt,
 	out my_ingress_headers_t                hdr,
@@ -173,7 +175,7 @@ control MyIngressDeparser(packet_out pkt,
 	in      my_ingress_metadata_t                   meta,
 	in ingress_intrinsic_metadata_for_deparser_t    ig_dprsr_md)
 {
-	Digest<digest_pmu_data_t>() digest_pmu_data;
+	//Digest<digest_pmu_data_t>() digest_pmu_data;
 	apply {
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
