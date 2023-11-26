@@ -10,7 +10,7 @@ import pandas as pd
 import sys
 from utils.pmu_csv_parser import parse_csv_data
 
-from scapy.all import IP, TCP, UDP, Ether, get_if_hwaddr, get_if_list, sendp
+from scapy.all import IP, UDP, Ether, get_if_hwaddr, get_if_list, sendp
 
 
 def get_if(ifacename):
