@@ -12,6 +12,12 @@ class PMUPacketBuffer:
     
     def get_recent_timestamp(self):
         return self.buffer[0]['soc'] + self.buffer[0]['frac_sec'] / 1000000
+    
+    def get_recent_soc(self):
+        return self.buffer[0]['soc']
+    
+    def get_recent_fracsec(self):
+        return self.buffer[0]['frac_sec']
 
     def get_packets(self):
         return self.buffer

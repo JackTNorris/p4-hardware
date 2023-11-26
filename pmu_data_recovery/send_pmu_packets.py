@@ -26,7 +26,7 @@ def get_if(ifacename):
     return iface
 
 
-def generate_packet(time, voltage, angle, settings={"pmu_measurement_bytes": 8, "destination_ip": "192.168.0.100", "destination_port": 4712}):
+def generate_pmu_packet(time, voltage, angle, settings={"pmu_measurement_bytes": 8, "destination_ip": "192.168.0.100", "destination_port": 4712}):
     # Define the PMU packet as a byte string
     datetime_str = str(time)[:26]
     global index
@@ -101,7 +101,7 @@ def main():
     num_to_send - 50
     for i in range(num_to_send):
         pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-        pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_packet(pmu_csv_data["times"][i], pmu_csv_data["magnitudes"][0][i], pmu_csv_data["phase_angles"][0][i])
+        pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_pmu_packet(pmu_csv_data["times"][i], pmu_csv_data["magnitudes"][0][i], pmu_csv_data["phase_angles"][0][i])
         sendp(pkt, iface=iface, verbose=False)
         print(i)
 

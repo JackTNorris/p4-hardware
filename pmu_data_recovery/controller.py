@@ -2,13 +2,7 @@
 import sys
 
 from scapy.all import (
-    TCP,
     UDP,
-    FieldLenField,
-    FieldListField,
-    IntField,
-    IPOption,
-    ShortField,
     get_if_list,
     sniff
 )
@@ -16,6 +10,7 @@ from PMUPacketBuffer import PMUPacketBuffer
 from scapy.layers.inet import _IPOption_HDR
 import struct
 import math
+from utils.jpt.jpt_algo import jpt_algo_mags_phase_angles, calc_missing_packet_count
 
 
 def get_if(ifacename):
@@ -63,6 +58,7 @@ def handle_pkt(pkt, packet_buffer):
         parsed_pmu_packet = pmu_packet_parser(pkt[UDP].payload.load)
         if counter > 1:
             if parsed_pmu_packet['soc'] + parsed_pmu_packet['frac_sec'] / 1000000 > packet_buffer.get_recent_timestamp() + 0.02:
+                print("Num missing in a row: ", calc_missing_packet_count(parsed_pmu_packet['soc'], parsed_pmu_packet['frac_sec'], packet_buffer.get_recent_timestamp(), packet_buffer.get_recent_fracsec()))
                 print("A packet has been lost @ row", counter + 1)
         packet_buffer.add_packet(parsed_pmu_packet)
 
