@@ -11,7 +11,7 @@ from scapy.layers.inet import _IPOption_HDR
 import struct
 import math
 from utils.jpt.jpt_algo import jpt_algo_mags_phase_angles, calc_missing_packet_count
-
+from senc_pmu_packets.py import generate_pmu_packet_raw_time
 
 def get_if(ifacename):
     ifs=get_if_list()
@@ -69,6 +69,34 @@ def parse_phasors(phasor_data, settings={"num_phasors": 1, "pmu_measurement_byte
         "angle": math.degrees(struct.unpack('>f', phasor_data[int(settings["pmu_measurement_bytes"]/2) : settings["pmu_measurement_bytes"]])[0]),
     }
     return [phasor]
+
+def generate_new_packets(num_packets, curr_soc, curr_fracsec, packet_buffer):
+    print('hi')
+    """
+    jpt_inputs = initial_jpt_inputs[0:]
+    for i in range(num_packets):
+        new_soc = last_stored_soc
+        new_frac = last_stored_fracsec + 16666
+        complex_voltage_estimate = jpt_algo(jpt_inputs[0], jpt_inputs[1], jpt_inputs[2])
+        generated_mag, generated_pa = phase_angle_and_magnitude_from_complex_voltage(complex_voltage_estimate)
+        if (new_frac) / 1000000 >= 1:
+            new_frac = (new_frac) % 1000000
+            new_soc = new_soc + 1
+
+        #make sure not generating too many
+        #print(str((curr_soc * 1000000 + curr_fracsec) - (new_soc * 1000000 + new_frac)))
+        if (curr_soc * 1000000 + curr_fracsec) - (new_soc * 1000000 + new_frac) > 16000:
+
+            packet_buffer.add_packet(generate_pmu_packet_raw_time )
+            pmu_recovery_data_buffer.insert({"timestamp": new_soc + new_frac / 1000000, "magnitude": generated_mag, "phase_angle": generated_pa})
+            #generate_new_packet("s1-eth2", new_soc, new_frac, generated_mag, generated_pa)
+            #time.sleep(.017)
+        last_stored_soc = new_soc
+        last_stored_fracsec = new_frac
+        jpt_inputs = [complex_voltage_estimate] + jpt_inputs[0:2]
+    """
+
+
 
 def main():
     packet_buffer = PMUPacketBuffer()

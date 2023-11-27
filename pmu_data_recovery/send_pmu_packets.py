@@ -80,6 +80,50 @@ def generate_pmu_packet(time, voltage, angle, settings={"pmu_measurement_bytes":
 
     return pmu_packet_payload
 
+def generate_pmu_packet_raw_time(soc_input, fracsec_input, voltage, angle, settings={"pmu_measurement_bytes": 8, "destination_ip": "192.168.0.100", "destination_port": 4712}):
+    # 2 byte
+    sync = b'\xAA\x01'
+    #sync = index.to_bytes(2, 'big')
+
+
+    # 2 byte, 44 for 32 bit values of PMU, 40 for 16 bit values of PMU
+    # 36 - 8 + 8 * number of PMUs || 36 - 8 + 4 * number PMUs
+    frame_size = b'\x00\x24'
+
+    # 2 byte, 12 for this
+    id_code = b'\x00\x0C'
+
+    # 4 byte
+    soc = soc_input.to_bytes(4, 'big')
+    #print(dt.strftime("%s"))
+    # 4 byte
+    frac_sec = fracsec_input.to_bytes(4, 'big')
+    # 2 byte (no errors)
+    stat = b'\x00\x00'
+
+    # 4 or 8 byte x number of phasors (see doc, 8 is for float)
+    voltage_bytes = struct.pack('>f', voltage)
+    angle_bytes = struct.pack('>f', math.radians(angle))
+    phasors = voltage_bytes + angle_bytes
+
+    # 2 byte, assumed 60
+    freq = b'\x09\xC4'
+
+    # 2 byte
+    dfreq = b'\x00\x00'
+
+    # 4 byte
+    analog = b'\x00\x00\x00\x00'
+
+    # 2 byte
+    digital = b'\x00\x00'
+
+    # 2 byte
+    chk = b'\x00\x00'
+
+    pmu_packet_payload = sync + frame_size + id_code + soc + frac_sec + stat + phasors + freq + dfreq + analog + digital + chk
+
+    return pmu_packet_payload
 
 def main():
     if len(sys.argv)<3:
@@ -101,7 +145,7 @@ def main():
     num_to_send - 50
     for i in range(num_to_send):
         pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-        pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_pmu_packet(pmu_csv_data["times"][i], pmu_csv_data["magnitudes"][0][i], pmu_csv_data["phase_angles"][0][i])
+        pkt = pkt /IP(dst=addr) / UDP(dport=4712, sport=random.randint(49152,65535)) / generate_pmu_packet(pmu_csv_data["times"][i], pmu_csv_data["magnitudes"][0][i], pmu_csv_data["phase_angles"][0][i])
         sendp(pkt, iface=iface, verbose=False)
         print(i)
 
