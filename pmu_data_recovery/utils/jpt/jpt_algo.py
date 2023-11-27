@@ -1,6 +1,7 @@
 import math
 import cmath
 
+wt = 0
 #feed in the magnitudes from most recent to least recent
 def jpt_algo_mags_phase_angles(mags, phase_angles):
     Ks = []

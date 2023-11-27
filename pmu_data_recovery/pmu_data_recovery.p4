@@ -7,6 +7,7 @@
 
 typedef bit<48> mac_addr_t;
 typedef bit<32> ipv4_addr_t;
+const bit<8> TYPE_UDP = 0x11;
 
 enum bit<16> ether_type_t {
 	IPV4 = 0x0800,
@@ -129,8 +130,24 @@ parser MyIngressParser(packet_in                pkt,
 
 	state parse_ipv4 {
 		pkt.extract(hdr.ipv4);
-		transition accept;
+		transition select(hdr.ipv4.protocol){
+            TYPE_UDP: parse_udp;
+            default: accept;
+        }
 	}
+
+	state parse_udp {
+        pkt.extract(hdr.udp);
+        transition select(hdr.udp.desPort){
+            4712: parse_pmu;
+            default: accept;
+        }
+    }
+
+    state parse_pmu {
+        pkt.extract(hdr.pmu);
+        transition accept;
+    }
 }
 
 control MyIngress(
@@ -166,7 +183,10 @@ control MyIngress(
 
 	apply {
 		ipv4_host.apply();
-        	copy_to_cpu();
+		if(hdr.pmu.stat == (bit<16>)0x0)
+		{
+			copy_to_cpu();
+		}
 	}
 }
 
@@ -180,6 +200,8 @@ control MyIngressDeparser(packet_out pkt,
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
 		pkt.emit(hdr.ipv4);
+		pkt.emit(hdr.udp);
+		pkt.emit(hdr.pmu);
 	}
 }
 

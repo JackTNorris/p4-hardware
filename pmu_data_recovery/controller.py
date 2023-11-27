@@ -10,8 +10,11 @@ from PMUPacketBuffer import PMUPacketBuffer
 from scapy.layers.inet import _IPOption_HDR
 import struct
 import math
-from utils.jpt.jpt_algo import jpt_algo_mags_phase_angles, calc_missing_packet_count
-from senc_pmu_packets.py import generate_pmu_packet_raw_time
+from utils.jpt.jpt_algo import jpt_algo_mags_phase_angles, calc_missing_packet_count, calculate_complex_voltage, jpt_algo, phase_angle_and_magnitude_from_complex_voltage
+from send_pmu_packets import generate_pmu_packet_raw_time
+from scapy.all import IP, TCP, UDP, Ether, get_if_hwaddr, get_if_list, sendp
+import random
+
 
 def get_if(ifacename):
     ifs=get_if_list()
@@ -51,15 +54,19 @@ def pmu_packet_parser(data, settings={"pmu_measurement_bytes": 8, "num_phasors":
     return pmu_packet
 
 counter = 0
-def handle_pkt(pkt, packet_buffer):
-    if UDP in pkt and pkt[UDP].dport == 1234:
+def handle_pkt(pkt, packet_buffer, iface):
+    if UDP in pkt and pkt[UDP].dport == 4712:
         global counter
-        counter += 1
         parsed_pmu_packet = pmu_packet_parser(pkt[UDP].payload.load)
+        if parsed_pmu_packet['stat'] > 0:
+            print('generated packet')
+            return
+        counter += 1
+        print(counter)
         if counter > 1:
             if parsed_pmu_packet['soc'] + parsed_pmu_packet['frac_sec'] / 1000000 > packet_buffer.get_recent_timestamp() + 0.02:
-                print("Num missing in a row: ", calc_missing_packet_count(parsed_pmu_packet['soc'], parsed_pmu_packet['frac_sec'], packet_buffer.get_recent_timestamp(), packet_buffer.get_recent_fracsec()))
-                print("A packet has been lost @ row", counter + 1)
+                num_missing = calc_missing_packet_count(parsed_pmu_packet['soc'], parsed_pmu_packet['frac_sec'], packet_buffer.get_recent_timestamp(), packet_buffer.get_recent_fracsec())
+                generate_new_packets(num_missing, parsed_pmu_packet['soc'], parsed_pmu_packet['frac_sec'], packet_buffer, iface)
         packet_buffer.add_packet(parsed_pmu_packet)
 
 
@@ -70,10 +77,12 @@ def parse_phasors(phasor_data, settings={"num_phasors": 1, "pmu_measurement_byte
     }
     return [phasor]
 
-def generate_new_packets(num_packets, curr_soc, curr_fracsec, packet_buffer):
-    print('hi')
-    """
-    jpt_inputs = initial_jpt_inputs[0:]
+def generate_new_packets(num_packets, curr_soc, curr_fracsec, packet_buffer, iface):
+    
+    jpt_inputs = list(map(lambda x: calculate_complex_voltage(x['phasors'][0]['magnitude'], x['phasors'][0]['angle']), packet_buffer.get_packets()[0:]))
+    last_stored_fracsec = packet_buffer.get_recent_fracsec()
+    last_stored_soc = packet_buffer.get_recent_soc()
+
     for i in range(num_packets):
         new_soc = last_stored_soc
         new_frac = last_stored_fracsec + 16666
@@ -86,17 +95,18 @@ def generate_new_packets(num_packets, curr_soc, curr_fracsec, packet_buffer):
         #make sure not generating too many
         #print(str((curr_soc * 1000000 + curr_fracsec) - (new_soc * 1000000 + new_frac)))
         if (curr_soc * 1000000 + curr_fracsec) - (new_soc * 1000000 + new_frac) > 16000:
+            generated_packet = generate_pmu_packet_raw_time(new_soc, new_frac, generated_mag, generated_pa, True)
+            send_pmu_packet(generated_packet, iface)
+            packet_buffer.add_packet(pmu_packet_parser(generated_packet))
 
-            packet_buffer.add_packet(generate_pmu_packet_raw_time )
-            pmu_recovery_data_buffer.insert({"timestamp": new_soc + new_frac / 1000000, "magnitude": generated_mag, "phase_angle": generated_pa})
-            #generate_new_packet("s1-eth2", new_soc, new_frac, generated_mag, generated_pa)
-            #time.sleep(.017)
         last_stored_soc = new_soc
         last_stored_fracsec = new_frac
         jpt_inputs = [complex_voltage_estimate] + jpt_inputs[0:2]
-    """
 
-
+def send_pmu_packet(pmu_packet, iface):
+    pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
+    pkt = pkt /IP(dst='10.0.0.5') / UDP(dport=4712, sport=random.randint(49152,65535)) / pmu_packet
+    sendp(pkt, iface=iface, verbose=False)
 
 def main():
     packet_buffer = PMUPacketBuffer()
@@ -105,7 +115,7 @@ def main():
     iface = get_if(sys.argv[1])
     print("sniffing on %s" % iface)
     sniff(iface = iface,
-          prn = lambda p: handle_pkt(p, packet_buffer))
+          prn = lambda p: handle_pkt(p, packet_buffer, iface))
 
 if __name__ == '__main__':
     main()

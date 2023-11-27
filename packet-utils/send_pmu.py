@@ -92,7 +92,7 @@ def main():
 
 
     pkt =  Ether(src=get_if_hwaddr(iface), dst='ff:ff:ff:ff:ff:ff')
-    pkt = pkt /IP(dst=addr) / UDP(dport=1234, sport=random.randint(49152,65535)) / generate_packet('2014-01-28 18:00:13.583000000', 69420, 42000)
+    pkt = pkt /IP(dst=addr) / UDP(dport=4712, sport=random.randint(49152,65535)) / generate_packet('2014-01-28 18:00:13.583000000', 69420, 42000)
     sendp(pkt, iface=iface, verbose=False)
 
 

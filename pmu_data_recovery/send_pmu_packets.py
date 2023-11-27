@@ -80,7 +80,7 @@ def generate_pmu_packet(time, voltage, angle, settings={"pmu_measurement_bytes":
 
     return pmu_packet_payload
 
-def generate_pmu_packet_raw_time(soc_input, fracsec_input, voltage, angle, settings={"pmu_measurement_bytes": 8, "destination_ip": "192.168.0.100", "destination_port": 4712}):
+def generate_pmu_packet_raw_time(soc_input, fracsec_input, voltage, angle, isGeneratedFlag = False):
     # 2 byte
     sync = b'\xAA\x01'
     #sync = index.to_bytes(2, 'big')
@@ -98,8 +98,11 @@ def generate_pmu_packet_raw_time(soc_input, fracsec_input, voltage, angle, setti
     #print(dt.strftime("%s"))
     # 4 byte
     frac_sec = fracsec_input.to_bytes(4, 'big')
+
     # 2 byte (no errors)
     stat = b'\x00\x00'
+    if isGeneratedFlag:
+        stat = b'\x00\x01'
 
     # 4 or 8 byte x number of phasors (see doc, 8 is for float)
     voltage_bytes = struct.pack('>f', voltage)

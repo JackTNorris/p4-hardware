@@ -56,7 +56,7 @@ def pmu_packet_parser(data, settings={"pmu_measurement_bytes": 8, "num_phasors":
 
 counter = 0
 def handle_pkt(pkt):
-    if UDP in pkt and pkt[UDP].dport == 1234:
+    if UDP in pkt and pkt[UDP].dport == 4712:
         #print("got a packet")
         #print(str(pkt[UDP].payload.load))
         global counter
