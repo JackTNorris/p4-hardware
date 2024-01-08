@@ -87,6 +87,8 @@ struct my_ingress_headers_t {
 	ethernet_h      ethernet;
 	vlan_tag_h      vlan_tag;
 	ipv4_h          ipv4;
+	udp_t		 	udp;
+	pmu_t				pmu;
 }
 
 struct my_ingress_metadata_t { }
