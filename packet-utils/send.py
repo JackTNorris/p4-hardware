@@ -19,7 +19,6 @@ def get_if(ifacename):
     return iface
 
 def main():
-
     if len(sys.argv)<4:
         print('pass 3 arguments: <iface> <destination> "<message>"')
         exit(1)

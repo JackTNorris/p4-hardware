@@ -60,6 +60,11 @@ header ipv4_h {
 	ipv4_addr_t dst_addr;
 }
 
+struct digest_a_t {
+    mac_addr_t dst_addr;
+    mac_addr_t src_addr;
+}
+
 /*** INGRESS PIPELINE ***/
 
 struct my_ingress_headers_t {
@@ -70,7 +75,7 @@ struct my_ingress_headers_t {
 
 struct my_ingress_metadata_t { }
 
-parser MyIngressParser(packet_in                pkt,
+parser SwitchIngressParser(packet_in                pkt,
 	out my_ingress_headers_t                hdr,
 	out my_ingress_metadata_t               meta,
 	out ingress_intrinsic_metadata_t        ig_intr_md)
@@ -105,7 +110,7 @@ parser MyIngressParser(packet_in                pkt,
 	}
 }
 
-control MyIngress(
+control SwitchIngress(
 	inout   my_ingress_headers_t                            hdr,
 	inout   my_ingress_metadata_t                           meta,
 	in      ingress_intrinsic_metadata_t                    ig_intr_md,
@@ -117,9 +122,10 @@ control MyIngress(
 		ig_tm_md.ucast_egress_port = port;
 	}
 
-        action copy_to_cpu() {
-                ig_tm_md.copy_to_cpu = 1;
-        }
+    action copy_to_cpu() {
+		ig_dprsr_md.digest_type = 1;
+        //ig_tm_md.copy_to_cpu = 1;
+    }
 
 	action drop() {
 		ig_dprsr_md.drop_ctl = 1;
@@ -142,24 +148,32 @@ control MyIngress(
 	}
 }
 
-control MyIngressDeparser(packet_out pkt,
+control SwitchIngressDeparser(packet_out pkt,
 	inout   my_ingress_headers_t                    hdr,
 	in      my_ingress_metadata_t                   meta,
 	in ingress_intrinsic_metadata_for_deparser_t    ig_dprsr_md)
 {
+	Digest<digest_a_t>() digest_a;
 	apply {
+        if (ig_dprsr_md.digest_type == 1) {
+			digest_a.pack({hdr.ethernet.src_addr, hdr.ethernet.src_addr});
+		}
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
 		pkt.emit(hdr.ipv4);
-	}
+ 	}
 }
 
 /*** EGRESS PIPELINE ***/
 
-struct my_egress_headers_t {}
+struct my_egress_headers_t {
+	ethernet_h      ethernet;
+	vlan_tag_h      vlan_tag;
+	ipv4_h          ipv4;
+}
 struct my_egress_metadata_t {}
 
-parser MyEgressParser(packet_in		pkt,
+parser EmptyEgressParser(packet_in		pkt,
 	out my_egress_headers_t         hdr,
 	out my_egress_metadata_t        meta,
 	out egress_intrinsic_metadata_t eg_intr_md)
@@ -167,7 +181,7 @@ parser MyEgressParser(packet_in		pkt,
 	state start { pkt.extract(eg_intr_md); transition accept; }
 }
 
-control MyEgress(
+control EmptyEgress(
 	inout   my_egress_headers_t                             hdr,
 	inout   my_egress_metadata_t                            meta,
 	in      egress_intrinsic_metadata_t                     eg_intr_md,
@@ -176,18 +190,24 @@ control MyEgress(
 	inout egress_intrinsic_metadata_for_output_port_t       eg_oport_md)
 { apply { }}
 
-control MyEgressDeparser(packet_out pkt,
+control EmptyEgressDeparser(packet_out pkt,
 	inout   my_egress_headers_t                             hdr,
 	in      my_egress_metadata_t                            meta,
 	in      egress_intrinsic_metadata_for_deparser_t        eg_dprsr_md)
-{ apply { }}
+{ 
+	apply {
+
+ 	}
+}
 
 /*** FINAL PACKAGE ***/
 
-Pipeline(
-	MyIngressParser(), MyIngress(), MyIngressDeparser(),
-	MyEgressParser(), MyEgress(), MyEgressDeparser()
-) pipe;
+Pipeline(SwitchIngressParser(),
+         SwitchIngress(),
+         SwitchIngressDeparser(),
+         EmptyEgressParser(),
+         EmptyEgress(),
+         EmptyEgressDeparser()) pipe;
 
 Switch(pipe) main;
 
