@@ -116,6 +116,13 @@ struct digest_a_t {
 	bit<32> soc_regs_0;
 	bit<32> soc_regs_1;
 	bit<32> soc_regs_2;
+
+	bit<32> phasor_a_regs_0;
+	bit<32> phasor_a_regs_1;
+	bit<32> phasor_a_regs_2;
+	
+	bit<32> phasor_b_regs_0;
+	bit<32> phasor_b_regs_1;
 }
 
 
@@ -139,9 +146,13 @@ struct my_ingress_metadata_t {
 	bit<32> soc_regs_1;
 	bit<32> soc_regs_2;
 
-	bit<64> phasor_regs_0;
-	bit<64> phasor_regs_1;
-	bit<64> phasor_regs_2;
+	bit<32> phasor_a_regs_0;
+	bit<32> phasor_a_regs_1;
+	bit<32> phasor_a_regs_2;
+	
+	bit<32> phasor_b_regs_0;
+	bit<32> phasor_b_regs_1;
+	bit<32> phasor_b_regs_2;
 
  }
 
@@ -255,21 +266,54 @@ control SwitchIngress(
 
 
 
-	/*
-	Register<pair, bit<32>>(32w1024) phasor_regs_0;
-    // A simple dual-width 32-bit register action that will increment the two
-    // 32-bit sections independently and return the value of one half before the
-    // modification.
-    RegisterAction<pair, bit<32>, pair>(phasor_regs_0) read_phasor_regs_0 = {
-        void apply(inout pair val, out pair rv){
-			pair my_pair;
-			//check this
-			my_pair.first = (bit<32>)(hdr.pmu.phasors >> 32);
-			my_pair.second = (bit<32>)hdr.pmu.phasors;
-			val = my_pair;
+	Register<bit<32>, bit<32>>(3) phasor_a_regs_0;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_a_regs_0) read_phasor_a_regs_0 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = (bit<32>)(hdr.pmu.phasors >> 32);
         }
     };
-	*/
+
+	Register<bit<32>, bit<32>>(3) phasor_a_regs_1;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_a_regs_1) read_phasor_a_regs_1 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.phasor_a_regs_0;
+        }
+    };
+
+	Register<bit<32>, bit<32>>(3) phasor_a_regs_2;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_a_regs_2) read_phasor_a_regs_2 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.phasor_a_regs_1;
+        }
+    };
+
+	Register<bit<32>, bit<32>>(3) phasor_b_regs_0;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_b_regs_0) read_phasor_b_regs_0 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = (bit<32>)(hdr.pmu.phasors >> 32);
+        }
+    };
+
+	Register<bit<32>, bit<32>>(3) phasor_b_regs_1;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_b_regs_1) read_phasor_b_regs_1 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.phasor_b_regs_0;
+        }
+    };
+
+	Register<bit<32>, bit<32>>(3) phasor_b_regs_2;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(phasor_b_regs_2) read_phasor_b_regs_2 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.phasor_b_regs_1;
+        }
+    };
+	
 
 	action send(PortId_t port) {
 		ig_tm_md.ucast_egress_port = port;
@@ -304,13 +348,27 @@ control SwitchIngress(
 		meta.soc_regs_2 = read_soc_regs_2.execute(0);
 	}
 
-	/*
-	action prep_phasor_reg_0() {
-		pair temp = read_phasor_regs_0.execute(0);
-		//check for big endian stuff
-		meta.phasor_regs_0 = temp.first ++ temp.second;
+	
+	action prep_phasor_a_reg_0() {
+		meta.phasor_a_regs_0 = read_phasor_a_regs_0.execute(0);
 	}
-	*/
+	action prep_phasor_a_reg_1() {
+		meta.phasor_a_regs_1 = read_phasor_a_regs_1.execute(0);
+	}
+	action prep_phasor_a_reg_2() {
+		meta.phasor_a_regs_2 = read_phasor_a_regs_2.execute(0);
+	}
+
+	action prep_phasor_b_reg_0() {
+		meta.phasor_b_regs_0 = read_phasor_b_regs_0.execute(0);
+	}
+	action prep_phasor_b_reg_1() {
+		meta.phasor_b_regs_1 = read_phasor_b_regs_1.execute(0);
+	}
+	action prep_phasor_b_reg_2() {
+		meta.phasor_b_regs_2 = read_phasor_b_regs_2.execute(0);
+	}
+	
 
 	action drop() {
 		ig_dprsr_md.drop_ctl = 1;
@@ -337,7 +395,14 @@ control SwitchIngress(
 		prep_soc_reg_1();
 		prep_soc_reg_2();
 
-		//prep_phasor_reg_0();
+		prep_phasor_a_reg_0();
+		prep_phasor_a_reg_1();
+		prep_phasor_a_reg_2();
+
+		prep_phasor_b_reg_0();
+		prep_phasor_b_reg_1();
+		prep_phasor_b_reg_2();
+
 
         send_digest();
 	}
@@ -352,7 +417,19 @@ control SwitchIngressDeparser(packet_out pkt,
 	
 	apply {
         if (ig_dprsr_md.digest_type == 1) {
-			digest_a.pack({meta.frac_sec_regs_0, meta.frac_sec_regs_1, meta.frac_sec_regs_2, meta.soc_regs_0, meta.soc_regs_1, meta.soc_regs_2});
+			digest_a.pack({
+				meta.frac_sec_regs_0, 
+				meta.frac_sec_regs_1, 
+				meta.frac_sec_regs_2, 
+				meta.soc_regs_0, 
+				meta.soc_regs_1, 
+				meta.soc_regs_2,
+				meta.phasor_a_regs_0, 
+				meta.phasor_a_regs_1, 
+				meta.phasor_a_regs_2,
+				meta.phasor_b_regs_0, 
+				meta.phasor_b_regs_1
+				});
 		}
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
