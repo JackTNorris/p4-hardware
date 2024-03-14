@@ -11,6 +11,13 @@
 typedef bit<48> mac_addr_t;
 typedef bit<32> ipv4_addr_t;
 
+
+struct pair {
+    bit<32>     first;
+    bit<32>     second;
+}
+
+
 enum bit<16> ether_type_t {
 	IPV4 = 0x0800,
 	ARP  = 0x0806,
@@ -102,9 +109,13 @@ struct jpt_pmu_triplet_t {
 }
 
 struct digest_a_t {
-    bit<32> reg0;
-	bit<32> reg1;
-	bit<32> reg2;
+    bit<32> frac_sec_regs_0;
+	bit<32> frac_sec_regs_1;
+	bit<32> frac_sec_regs_2;
+
+	bit<32> soc_regs_0;
+	bit<32> soc_regs_1;
+	bit<32> soc_regs_2;
 }
 
 
@@ -123,8 +134,15 @@ struct my_ingress_metadata_t {
 	bit<32> frac_sec_regs_0;
 	bit<32> frac_sec_regs_1;
 	bit<32> frac_sec_regs_2;
-	bit<32> temp1;
-	bit<32> temp2;
+
+	bit<32> soc_regs_0;
+	bit<32> soc_regs_1;
+	bit<32> soc_regs_2;
+
+	bit<64> phasor_regs_0;
+	bit<64> phasor_regs_1;
+	bit<64> phasor_regs_2;
+
  }
 
 parser SwitchIngressParser(packet_in                pkt,
@@ -195,8 +213,6 @@ control SwitchIngress(
         }
     };
 	
-	
-	
 	Register<bit<32>, bit<32>>(3) frac_sec_regs_1;
     RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs_1) read_frac_sec_regs_1 = {
         void apply(inout bit<32> val, out bit<32> rv) {
@@ -205,7 +221,6 @@ control SwitchIngress(
         }
     };
 	
-	
 	Register<bit<32>, bit<32>>(3) frac_sec_regs_2;
     RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs_2) read_frac_sec_regs_2 = {
         void apply(inout bit<32> val, out bit<32> rv) {
@@ -213,7 +228,48 @@ control SwitchIngress(
 			val = meta.frac_sec_regs_1;
         }
     };
+
+	Register<bit<32>, bit<32>>(3) soc_regs_0;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(soc_regs_0) read_soc_regs_0 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+			rv = val;
+			val = hdr.pmu.soc;
+        }
+    };
 	
+	Register<bit<32>, bit<32>>(3) soc_regs_1;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(soc_regs_1) read_soc_regs_1 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.soc_regs_0;
+        }
+    };
+	
+	Register<bit<32>, bit<32>>(3) soc_regs_2;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(soc_regs_2) read_soc_regs_2 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.soc_regs_1;
+        }
+    };
+
+
+
+	/*
+	Register<pair, bit<32>>(32w1024) phasor_regs_0;
+    // A simple dual-width 32-bit register action that will increment the two
+    // 32-bit sections independently and return the value of one half before the
+    // modification.
+    RegisterAction<pair, bit<32>, pair>(phasor_regs_0) read_phasor_regs_0 = {
+        void apply(inout pair val, out pair rv){
+			pair my_pair;
+			//check this
+			my_pair.first = (bit<32>)(hdr.pmu.phasors >> 32);
+			my_pair.second = (bit<32>)hdr.pmu.phasors;
+			val = my_pair;
+        }
+    };
+	*/
 
 	action send(PortId_t port) {
 		ig_tm_md.ucast_egress_port = port;
@@ -224,17 +280,37 @@ control SwitchIngress(
         //ig_tm_md.copy_to_cpu = 1;
     }
 
-	action prep_reg_0() {
+	action prep_frac_sec_reg_0() {
 		meta.frac_sec_regs_0 = read_frac_sec_regs_0.execute(0);
 	}
 
-	action prep_reg_1() {
+	action prep_frac_sec_reg_1() {
 		meta.frac_sec_regs_1 = read_frac_sec_regs_1.execute(0);
 	}
 
-	action prep_reg_2() {
+	action prep_frac_sec_reg_2() {
 		meta.frac_sec_regs_2 = read_frac_sec_regs_2.execute(0);
 	}
+
+	action prep_soc_reg_0() {
+		meta.soc_regs_0 = read_soc_regs_0.execute(0);
+	}
+
+	action prep_soc_reg_1() {
+		meta.soc_regs_1 = read_soc_regs_1.execute(0);
+	}
+
+	action prep_soc_reg_2() {
+		meta.soc_regs_2 = read_soc_regs_2.execute(0);
+	}
+
+	/*
+	action prep_phasor_reg_0() {
+		pair temp = read_phasor_regs_0.execute(0);
+		//check for big endian stuff
+		meta.phasor_regs_0 = temp.first ++ temp.second;
+	}
+	*/
 
 	action drop() {
 		ig_dprsr_md.drop_ctl = 1;
@@ -253,9 +329,16 @@ control SwitchIngress(
 
 	apply {
 		ipv4_host.apply();
-		prep_reg_0();
-		prep_reg_1();
-		prep_reg_2();
+		prep_frac_sec_reg_0();
+		prep_frac_sec_reg_1();
+		prep_frac_sec_reg_2();
+
+		prep_soc_reg_0();
+		prep_soc_reg_1();
+		prep_soc_reg_2();
+
+		//prep_phasor_reg_0();
+
         send_digest();
 	}
 }
@@ -265,24 +348,11 @@ control SwitchIngressDeparser(packet_out pkt,
 	in      my_ingress_metadata_t                   meta,
 	in ingress_intrinsic_metadata_for_deparser_t    ig_dprsr_md)
 {
-
-	//Register<T, I>
-	//T = type of each entry, I = type of index
-
-	/*
-    Register<bit<32>, bit<32>>(3) soc_regs;
-    Register<bit<32>, bit<32>>(3) magnitude_regs;
-    Register<bit<32>, bit<32>>(3) phase_angle_regs;
-
-
-
-	bit<32> new_reg3;
-	*/
 	Digest<digest_a_t>() digest_a;
 	
 	apply {
         if (ig_dprsr_md.digest_type == 1) {
-			digest_a.pack({meta.frac_sec_regs_0, meta.frac_sec_regs_1, meta.frac_sec_regs_2});
+			digest_a.pack({meta.frac_sec_regs_0, meta.frac_sec_regs_1, meta.frac_sec_regs_2, meta.soc_regs_0, meta.soc_regs_1, meta.soc_regs_2});
 		}
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
