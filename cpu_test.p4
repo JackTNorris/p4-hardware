@@ -1,8 +1,11 @@
 /* -*- P4_16 -*- */
 
 #include <core.p4>
+#if __TARGET_TOFINO__ == 2
+#include <t2na.p4>
+#else
 #include <tna.p4>
-
+#endif
 /*** CONSTANTS AND TYPES ***/
 
 typedef bit<48> mac_addr_t;
@@ -15,6 +18,8 @@ enum bit<16> ether_type_t {
 	IPV6 = 0x86DD,
 	MPLS = 0x8874
 }
+
+const bit<8> TYPE_UDP = 0x11;
 
 #if __TARGET_TOFINO__ == 1
 const PortId_t CPU_PORT = 192;
@@ -45,6 +50,28 @@ header vlan_tag_h {
 	ether_type_t ether_type;
 }
 
+header pmu_t {
+    bit<16>   sync;
+    bit<16>   frame_size;
+    bit<16>   id_code;
+    bit<32>   soc;
+    bit<32>   fracsec;
+    bit<16>   stat;
+    bit<64>   phasors;
+    bit<16>   freq;
+    bit<16>   dfreq;
+    bit<32>   analog;
+    bit<16>   digital;
+    bit<16>   chk;
+}
+
+header udp_t{
+  bit<16> srcPort;
+  bit<16> desPort;
+  bit<16> len;
+  bit<16> checksum;
+}
+
 header ipv4_h {
 	bit<4>  version;
 	bit<4>  ihl;
@@ -60,10 +87,25 @@ header ipv4_h {
 	ipv4_addr_t dst_addr;
 }
 
-struct digest_a_t {
-    mac_addr_t dst_addr;
-    mac_addr_t src_addr;
+struct jpt_pmu_triplet_t {
+  bit<32>   soc0;
+  bit<32>   fracsec0;
+  bit<64>   phasors0;
+  bit<32>   soc1;
+  bit<32>   fracsec1;
+  bit<64>   phasors1;
+  bit<32>   soc2;
+  bit<32>   fracsec2;
+  bit<64>   phasors2;
+  bit<32>   curr_soc;
+  bit<32>   curr_fracsec;
 }
+
+struct digest_a_t {
+    bit<32> test;
+}
+
+
 
 /*** INGRESS PIPELINE ***/
 
@@ -71,9 +113,13 @@ struct my_ingress_headers_t {
 	ethernet_h      ethernet;
 	vlan_tag_h      vlan_tag;
 	ipv4_h          ipv4;
+	udp_t		 	udp;
+	pmu_t				pmu;
 }
 
-struct my_ingress_metadata_t { }
+struct my_ingress_metadata_t {
+	bit<32> frac_sec_regs;
+ }
 
 parser SwitchIngressParser(packet_in                pkt,
 	out my_ingress_headers_t                hdr,
@@ -104,10 +150,26 @@ parser SwitchIngressParser(packet_in                pkt,
 		}
 	}
 
-	state parse_ipv4 {
-		pkt.extract(hdr.ipv4);
-		transition accept;
-	}
+    state parse_ipv4 {
+        pkt.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol){
+            TYPE_UDP: parse_udp;
+            default: accept;
+        }
+    }
+
+    state parse_udp {
+        pkt.extract(hdr.udp);
+        transition select(hdr.udp.desPort){
+            4712: parse_pmu;
+            default: accept;
+        }
+    }
+
+    state parse_pmu {
+        pkt.extract(hdr.pmu);
+        transition accept;
+    }
 }
 
 control SwitchIngress(
@@ -118,13 +180,22 @@ control SwitchIngress(
 	inout   ingress_intrinsic_metadata_for_deparser_t       ig_dprsr_md,
 	inout   ingress_intrinsic_metadata_for_tm_t             ig_tm_md)
 {
+
+	Register<bit<32>, bit<32>>(3, 100) frac_sec_regs;
+
+    RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs) read_frac_sec_regs = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+        }
+    };
+
 	action send(PortId_t port) {
 		ig_tm_md.ucast_egress_port = port;
 	}
 
-    action copy_to_cpu() {
+    action send_digest() {
+		meta.frac_sec_regs = read_frac_sec_regs.execute(0);
 		ig_dprsr_md.digest_type = 1;
-        //ig_tm_md.copy_to_cpu = 1;
     }
 
 	action drop() {
@@ -144,7 +215,7 @@ control SwitchIngress(
 
 	apply {
 		ipv4_host.apply();
-        	copy_to_cpu();
+        send_digest();
 	}
 }
 
@@ -153,14 +224,30 @@ control SwitchIngressDeparser(packet_out pkt,
 	in      my_ingress_metadata_t                   meta,
 	in ingress_intrinsic_metadata_for_deparser_t    ig_dprsr_md)
 {
+
+	//Register<T, I>
+	//T = type of each entry, I = type of index
+
+	/*
+    Register<bit<32>, bit<32>>(3) soc_regs;
+    Register<bit<32>, bit<32>>(3) magnitude_regs;
+    Register<bit<32>, bit<32>>(3) phase_angle_regs;
+
+
+
+	bit<32> new_reg3;
+	*/
 	Digest<digest_a_t>() digest_a;
+	
 	apply {
         if (ig_dprsr_md.digest_type == 1) {
-			digest_a.pack({hdr.ethernet.src_addr, hdr.ethernet.src_addr});
+			digest_a.pack({meta.frac_sec_regs});
 		}
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
 		pkt.emit(hdr.ipv4);
+		pkt.emit(hdr.udp);
+		pkt.emit(hdr.pmu);
  	}
 }
 
@@ -170,6 +257,8 @@ struct my_egress_headers_t {
 	ethernet_h      ethernet;
 	vlan_tag_h      vlan_tag;
 	ipv4_h          ipv4;
+	udp_t udp;
+	pmu_t pmu;
 }
 struct my_egress_metadata_t {}
 
@@ -178,7 +267,49 @@ parser EmptyEgressParser(packet_in		pkt,
 	out my_egress_metadata_t        meta,
 	out egress_intrinsic_metadata_t eg_intr_md)
 {
-	state start { pkt.extract(eg_intr_md); transition accept; }
+	state start {
+		pkt.extract(eg_intr_md);
+		pkt.advance(PORT_METADATA_SIZE);
+		transition parse_ethernet;
+	}
+
+	state parse_ethernet {
+		pkt.extract(hdr.ethernet);
+		transition select(hdr.ethernet.ether_type) {
+			ether_type_t.TPID: parse_vlan_tag;
+			ether_type_t.IPV4: parse_ipv4;
+			default: accept;
+		}
+	}
+
+	state parse_vlan_tag {
+		pkt.extract(hdr.vlan_tag);
+		transition select(hdr.vlan_tag.ether_type) {
+			ether_type_t.IPV4 : parse_ipv4;
+			default: accept;
+		}
+	}
+
+    state parse_ipv4 {
+        pkt.extract(hdr.ipv4);
+        transition select(hdr.ipv4.protocol){
+            TYPE_UDP: parse_udp;
+            default: accept;
+        }
+    }
+
+    state parse_udp {
+        pkt.extract(hdr.udp);
+        transition select(hdr.udp.desPort){
+            4712: parse_pmu;
+            default: accept;
+        }
+    }
+
+    state parse_pmu {
+        pkt.extract(hdr.pmu);
+        transition accept;
+    }
 }
 
 control EmptyEgress(
@@ -188,7 +319,11 @@ control EmptyEgress(
 	in      egress_intrinsic_metadata_from_parser_t         eg_prsr_md,
 	inout   egress_intrinsic_metadata_for_deparser_t        eg_dprsr_md,
 	inout egress_intrinsic_metadata_for_output_port_t       eg_oport_md)
-{ apply { }}
+{ 
+	apply { 
+		
+	}
+}
 
 control EmptyEgressDeparser(packet_out pkt,
 	inout   my_egress_headers_t                             hdr,

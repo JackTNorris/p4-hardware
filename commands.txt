@@ -1,0 +1,21 @@
+ucli
+pm
+port-add 1/0 10G NONE
+port-add 2/0 10G NONE
+port-add 3/0 10G NONE
+port-add 4/0 10G NONE
+port-add 5/0 10G NONE
+port-add 6/0 10G NONE
+port-add 7/0 10G NONE
+port-add 8/0 10G NONE
+port-add 57/- 10G NONE
+port-enb 1/0
+port-enb 2/0
+port-enb 3/0
+port-enb 4/0
+port-enb 5/0
+port-enb 6/0
+port-enb 7/0
+port-enb 8/0
+port-enb 57/-
+exit
