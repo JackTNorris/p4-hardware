@@ -102,7 +102,9 @@ struct jpt_pmu_triplet_t {
 }
 
 struct digest_a_t {
-    bit<32> test;
+    bit<32> reg0;
+	bit<32> reg1;
+	bit<32> reg2;
 }
 
 
@@ -118,7 +120,11 @@ struct my_ingress_headers_t {
 }
 
 struct my_ingress_metadata_t {
-	bit<32> frac_sec_regs;
+	bit<32> frac_sec_regs_0;
+	bit<32> frac_sec_regs_1;
+	bit<32> frac_sec_regs_2;
+	bit<32> temp1;
+	bit<32> temp2;
  }
 
 parser SwitchIngressParser(packet_in                pkt,
@@ -181,22 +187,54 @@ control SwitchIngress(
 	inout   ingress_intrinsic_metadata_for_tm_t             ig_tm_md)
 {
 
-	Register<bit<32>, bit<32>>(3, 100) frac_sec_regs;
-
-    RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs) read_frac_sec_regs = {
+	Register<bit<32>, bit<32>>(3) frac_sec_regs_0;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs_0) read_frac_sec_regs_0 = {
         void apply(inout bit<32> val, out bit<32> rv) {
-            rv = val;
+			rv = val;
+			val = hdr.pmu.fracsec;
         }
     };
+	
+	
+	
+	Register<bit<32>, bit<32>>(3) frac_sec_regs_1;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs_1) read_frac_sec_regs_1 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.frac_sec_regs_0;
+        }
+    };
+	
+	
+	Register<bit<32>, bit<32>>(3) frac_sec_regs_2;
+    RegisterAction<bit<32>, bit<32>, bit<32>>(frac_sec_regs_2) read_frac_sec_regs_2 = {
+        void apply(inout bit<32> val, out bit<32> rv) {
+            rv = val;
+			val = meta.frac_sec_regs_1;
+        }
+    };
+	
 
 	action send(PortId_t port) {
 		ig_tm_md.ucast_egress_port = port;
 	}
 
     action send_digest() {
-		meta.frac_sec_regs = read_frac_sec_regs.execute(0);
 		ig_dprsr_md.digest_type = 1;
+        //ig_tm_md.copy_to_cpu = 1;
     }
+
+	action prep_reg_0() {
+		meta.frac_sec_regs_0 = read_frac_sec_regs_0.execute(0);
+	}
+
+	action prep_reg_1() {
+		meta.frac_sec_regs_1 = read_frac_sec_regs_1.execute(0);
+	}
+
+	action prep_reg_2() {
+		meta.frac_sec_regs_2 = read_frac_sec_regs_2.execute(0);
+	}
 
 	action drop() {
 		ig_dprsr_md.drop_ctl = 1;
@@ -215,6 +253,9 @@ control SwitchIngress(
 
 	apply {
 		ipv4_host.apply();
+		prep_reg_0();
+		prep_reg_1();
+		prep_reg_2();
         send_digest();
 	}
 }
@@ -241,7 +282,7 @@ control SwitchIngressDeparser(packet_out pkt,
 	
 	apply {
         if (ig_dprsr_md.digest_type == 1) {
-			digest_a.pack({meta.frac_sec_regs});
+			digest_a.pack({meta.frac_sec_regs_0, meta.frac_sec_regs_1, meta.frac_sec_regs_2});
 		}
 		pkt.emit(hdr.ethernet);
 		pkt.emit(hdr.vlan_tag);
@@ -267,49 +308,7 @@ parser EmptyEgressParser(packet_in		pkt,
 	out my_egress_metadata_t        meta,
 	out egress_intrinsic_metadata_t eg_intr_md)
 {
-	state start {
-		pkt.extract(eg_intr_md);
-		pkt.advance(PORT_METADATA_SIZE);
-		transition parse_ethernet;
-	}
-
-	state parse_ethernet {
-		pkt.extract(hdr.ethernet);
-		transition select(hdr.ethernet.ether_type) {
-			ether_type_t.TPID: parse_vlan_tag;
-			ether_type_t.IPV4: parse_ipv4;
-			default: accept;
-		}
-	}
-
-	state parse_vlan_tag {
-		pkt.extract(hdr.vlan_tag);
-		transition select(hdr.vlan_tag.ether_type) {
-			ether_type_t.IPV4 : parse_ipv4;
-			default: accept;
-		}
-	}
-
-    state parse_ipv4 {
-        pkt.extract(hdr.ipv4);
-        transition select(hdr.ipv4.protocol){
-            TYPE_UDP: parse_udp;
-            default: accept;
-        }
-    }
-
-    state parse_udp {
-        pkt.extract(hdr.udp);
-        transition select(hdr.udp.desPort){
-            4712: parse_pmu;
-            default: accept;
-        }
-    }
-
-    state parse_pmu {
-        pkt.extract(hdr.pmu);
-        transition accept;
-    }
+	state start { pkt.extract(eg_intr_md); transition accept; }
 }
 
 control EmptyEgress(
@@ -319,11 +318,7 @@ control EmptyEgress(
 	in      egress_intrinsic_metadata_from_parser_t         eg_prsr_md,
 	inout   egress_intrinsic_metadata_for_deparser_t        eg_dprsr_md,
 	inout egress_intrinsic_metadata_for_output_port_t       eg_oport_md)
-{ 
-	apply { 
-		
-	}
-}
+{ apply { }}
 
 control EmptyEgressDeparser(packet_out pkt,
 	inout   my_egress_headers_t                             hdr,
